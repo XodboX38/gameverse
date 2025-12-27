@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optional: Add the dark background globally if needed */
+body {
+  background-color: #111111;
+  color: white;
+}
