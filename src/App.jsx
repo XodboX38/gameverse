@@ -123,12 +123,91 @@ const debounce = (func, wait) => {
  */
 const injectServiceWorker = () => {
   if (!('serviceWorker' in navigator)) return;
-  // ... existing SW code ...
-  // Keeping SW minimal for this snippet as logic hasn't changed
+  
+  const swCode = `
+    const CACHE_NAME = 'gameverse-v1';
+    const URLS_TO_CACHE = ['/', '/index.html'];
+
+    self.addEventListener('install', (event) => {
+      self.skipWaiting();
+    });
+
+    self.addEventListener('activate', (event) => {
+      event.waitUntil(clients.claim());
+    });
+
+    self.addEventListener('fetch', (event) => {
+      const { request } = event;
+      const url = new URL(request.url);
+
+      // Strategy 1: Stale-While-Revalidate for API requests
+      if (url.hostname.includes('api.rawg.io')) {
+        event.respondWith(
+          caches.open(CACHE_NAME).then(async (cache) => {
+            const cachedResponse = await cache.match(request);
+            const fetchPromise = fetch(request).then((networkResponse) => {
+              cache.put(request, networkResponse.clone());
+              return networkResponse;
+            });
+            return cachedResponse || fetchPromise;
+          })
+        );
+        return;
+      }
+
+      // Strategy 2: Cache First for Images
+      if (url.hostname.includes('media.rawg.io')) {
+        event.respondWith(
+          caches.open(CACHE_NAME).then(async (cache) => {
+            const cachedResponse = await cache.match(request);
+            if (cachedResponse) return cachedResponse;
+            try {
+              const networkResponse = await fetch(request);
+              cache.put(request, networkResponse.clone());
+              return networkResponse;
+            } catch (e) {
+              return new Response('', { status: 408, statusText: 'Request timed out.' });
+            }
+          })
+        );
+        return;
+      }
+    });
+  `;
+
+  const blob = new Blob([swCode], { type: 'application/javascript' });
+  const swUrl = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl)
+    .catch(err => console.log('SW registration failed: ', err));
 };
 
 const injectManifest = () => {
-  // ... existing manifest code ...
+  const manifest = {
+    name: "GameVerse",
+    short_name: "GameVerse",
+    start_url: "/",
+    display: "standalone",
+    background_color: "#111111",
+    theme_color: "#8b5cf6",
+    icons: [
+      {
+        src: "https://cdn-icons-png.flaticon.com/512/3408/3408506.png", 
+        sizes: "192x192",
+        type: "image/png"
+      }
+    ]
+  };
+  const stringManifest = JSON.stringify(manifest);
+  const blob = new Blob([stringManifest], { type: "application/json" });
+  const manifestURL = URL.createObjectURL(blob);
+  
+  let link = document.querySelector("link[rel='manifest']");
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "manifest";
+    document.head.appendChild(link);
+  }
+  link.href = manifestURL;
 };
 
 /**
@@ -276,7 +355,6 @@ const CinematicLoader = () => (
     exit={{ opacity: 0, transition: { duration: 0.8, ease: "easeInOut" } }}
     className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden"
   >
-    {/* ... same loader content ... */}
     <div className="absolute inset-0 opacity-30 bg-gradient-to-br from-violet-900 via-black to-black animate-pulse" />
     <motion.div
       initial={{ scale: 0.8, opacity: 0 }}
@@ -719,7 +797,7 @@ const DetailView = ({ gameId, onBack, apiKey, useGameDataHook, isFavorite, toggl
       </AnimatePresence>
     </div>
   );
-};
+}
 
 // Mobile Optimized Navbar
 const Navbar = React.memo(({ onViewChange, currentView, onSearch, apiKey, setApiKey, getSuggestions, onGameSelect }) => {
@@ -828,7 +906,10 @@ const Navbar = React.memo(({ onViewChange, currentView, onSearch, apiKey, setApi
 export default function App() {
   const [view, setView] = useState('home'); 
   const [selectedId, setSelectedId] = useState(null);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('rawg_api_key') || '');
+  
+  // Use localStorage OR the VITE environment variable as default
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('rawg_api_key') || import.meta.env.VITE_RAWG_API_KEY || '');
+  
   const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem('gv_favorites')) || []);
   
   const isOnline = useOnlineStatus();
