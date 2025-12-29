@@ -884,7 +884,7 @@ const Navbar = React.memo(({ onViewChange, currentView, onSearch, apiKey, setApi
                 <label className="block text-xs font-bold text-gray-400 mb-2 uppercase">API Key</label>
                 <input 
                   type="text" 
-                  value={apiKey}
+                  value={""}
                   onChange={(e) => setApiKey(e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white text-sm font-mono"
                   placeholder="Enter RAWG API Key"
